@@ -36,6 +36,10 @@ Garantizar transparencia total: Cualquier ciudadano o auditor (como viste en la 
 
 Cumplir normativas: Asegura la trazabilidad y la integridad referencial (evitando que se inventen tokens de la nada o que existan transferencias fantasma).
 
+<img width="1376" height="768" alt="Tokenizacion " src="https://github.com/user-attachments/assets/2d586ff2-75ea-4ea6-9f8c-0824c87a00d4" />
+
+
+
 
 ## 🛠️ Tecnologías utilizadas
 * **Python 3.13**
