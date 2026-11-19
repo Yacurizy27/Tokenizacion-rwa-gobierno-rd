@@ -235,6 +235,193 @@ def transfer_tokens(tx_hash, token_id, from_wallet, to_wallet, amount):
         conn.close()
 
 
+def consultar_esquema(
+    vista="movimientos",
+    token_id=None,
+    asset_id=None,
+    wallet_address=None,
+    tx_type=None,
+    fecha_desde=None,
+    fecha_hasta=None,
+    limite=25
+):
+    """
+    Esquema unificado de consultas para auditoría y análisis.
+    Vistas disponibles:
+      - 'movimientos': historial detallado de transacciones con filtros.
+      - 'posiciones': saldo neto por wallet y token con filtros.
+      - 'suministro': comparación entre total_supply, emitido (ISSUE) y circulación.
+    """
+    with get_connection(row_factory=True) as conn:
+        if vista == "movimientos":
+            sql = """
+                SELECT
+                    tx.timestamp,
+                    tx.tx_hash,
+                    tx.tx_type,
+                    t.asset_id,
+                    tx.token_id,
+                    t.symbol,
+                    COALESCE(tx.from_wallet, 'SISTEMA') AS from_wallet,
+                    COALESCE(w1.owner_name, 'SISTEMA (Emisión)') AS emisor,
+                    tx.to_wallet,
+                    w2.owner_name AS receptor,
+                    tx.amount
+                FROM transactions tx
+                JOIN tokens t ON tx.token_id = t.token_id
+                LEFT JOIN wallets w1 ON tx.from_wallet = w1.wallet_address
+                JOIN wallets w2 ON tx.to_wallet = w2.wallet_address
+                WHERE 1=1
+            """
+            params = []
+
+            if token_id:
+                sql += " AND tx.token_id = ?"
+                params.append(token_id)
+            if asset_id:
+                sql += " AND t.asset_id = ?"
+                params.append(asset_id)
+            if wallet_address:
+                sql += " AND (tx.from_wallet = ? OR tx.to_wallet = ?)"
+                params.extend([wallet_address, wallet_address])
+            if tx_type:
+                sql += " AND UPPER(tx.tx_type) = UPPER(?)"
+                params.append(tx_type)
+            if fecha_desde:
+                sql += " AND tx.timestamp >= ?"
+                params.append(fecha_desde)
+            if fecha_hasta:
+                sql += " AND tx.timestamp <= ?"
+                params.append(fecha_hasta)
+
+            sql += " ORDER BY tx.timestamp DESC, tx.rowid DESC LIMIT ?;"
+            params.append(limite)
+
+            rows = conn.execute(sql, params).fetchall()
+            print("\n" + "=" * 115)
+            print(f"ESQUEMA DE CONSULTA [MOVIMIENTOS] — Registros encontrados: {len(rows)} (Límite: {limite})")
+            print("=" * 115)
+            print(f"{'FECHA/HORA':<19} | {'TIPO':<8} | {'TOKEN ID':<16} | {'EMISOR':<22} | {'RECEPTOR':<22} | {'MONTO':>12}")
+            print("-" * 115)
+            for r in rows:
+                fecha = (r["timestamp"] or "")[:19]
+                print(f"{fecha:<19} | {r['tx_type']:<8} | {r['token_id']:<16} | {r['emisor']:<22} | {r['receptor']:<22} | {r['amount']:>12,.2f}")
+            return rows
+
+        elif vista == "posiciones":
+            sql = """
+                WITH movimientos AS (
+                    SELECT token_id, to_wallet AS wallet_address, amount AS delta
+                    FROM transactions
+                    WHERE to_wallet IS NOT NULL
+                    UNION ALL
+                    SELECT token_id, from_wallet AS wallet_address, -amount AS delta
+                    FROM transactions
+                    WHERE from_wallet IS NOT NULL
+                )
+                SELECT
+                    t.asset_id,
+                    m.token_id,
+                    t.symbol,
+                    m.wallet_address,
+                    w.owner_name,
+                    w.role,
+                    ROUND(SUM(m.delta), 4) AS balance
+                FROM movimientos m
+                JOIN wallets w ON m.wallet_address = w.wallet_address
+                JOIN tokens t ON m.token_id = t.token_id
+                WHERE 1=1
+            """
+            params = []
+
+            if token_id:
+                sql += " AND m.token_id = ?"
+                params.append(token_id)
+            if asset_id:
+                sql += " AND t.asset_id = ?"
+                params.append(asset_id)
+            if wallet_address:
+                sql += " AND m.wallet_address = ?"
+                params.append(wallet_address)
+
+            sql += """
+                GROUP BY m.token_id, m.wallet_address
+                HAVING ABS(balance) > 1e-9
+                ORDER BY balance DESC
+                LIMIT ?;
+            """
+            params.append(limite)
+
+            rows = conn.execute(sql, params).fetchall()
+            print("\n" + "=" * 115)
+            print(f"ESQUEMA DE CONSULTA [POSICIONES] — Registros encontrados: {len(rows)} (Límite: {limite})")
+            print("=" * 115)
+            print(f"{'TOKEN ID':<16} | {'WALLET':<20} | {'TITULAR':<28} | {'ROL':<10} | {'SALDO':>14}")
+            print("-" * 115)
+            for r in rows:
+                print(f"{r['token_id']:<16} | {r['wallet_address']:<20} | {r['owner_name']:<28} | {r['role']:<10} | {r['balance']:>14,.2f}")
+            return rows
+
+        elif vista == "suministro":
+            sql = """
+                SELECT
+                    t.asset_id,
+                    t.token_id,
+                    t.symbol,
+                    t.total_supply,
+                    COALESCE((
+                        SELECT SUM(amount)
+                        FROM transactions tx
+                        WHERE tx.token_id = t.token_id AND tx.tx_type = 'ISSUE'
+                    ), 0) AS emitido,
+                    COALESCE((
+                        SELECT SUM(delta)
+                        FROM (
+                            SELECT to_wallet AS wallet, amount AS delta FROM transactions WHERE token_id = t.token_id AND to_wallet IS NOT NULL
+                            UNION ALL
+                            SELECT from_wallet AS wallet, -amount AS delta FROM transactions WHERE token_id = t.token_id AND from_wallet IS NOT NULL
+                        )
+                    ), 0) AS circulacion
+                FROM tokens t
+                WHERE 1=1
+            """
+            params = []
+            if token_id:
+                sql += " AND t.token_id = ?"
+                params.append(token_id)
+            if asset_id:
+                sql += " AND t.asset_id = ?"
+                params.append(asset_id)
+
+            sql += " ORDER BY t.token_id ASC LIMIT ?;"
+            params.append(limite)
+
+            rows = conn.execute(sql, params).fetchall()
+            print("\n" + "=" * 115)
+            print(f"ESQUEMA DE CONSULTA [SUMINISTRO] — Registros encontrados: {len(rows)} (Límite: {limite})")
+            print("=" * 115)
+            print(f"{'TOKEN ID':<16} | {'SÍMBOLO':<8} | {'SUPPLY TOPE':>13} | {'EMITIDO':>13} | {'CIRCULACIÓN':>13} | {'ESTADO':<14}")
+            print("-" * 115)
+            for r in rows:
+                excede_supply = r["emitido"] > r["total_supply"] + 1e-9
+                cuadra_ledger = abs(r["emitido"] - r["circulacion"]) < 1e-9
+                if not cuadra_ledger:
+                    estado = "DESCUADRE [✘]"
+                elif excede_supply:
+                    estado = "EXCEDIDO [⚠]"
+                else:
+                    estado = "OK [✔]"
+                print(
+                    f"{r['token_id']:<16} | {r['symbol']:<8} | {r['total_supply']:>13,.2f} | "
+                    f"{r['emitido']:>13,.2f} | {r['circulacion']:>13,.2f} | {estado:<14}"
+                )
+            return rows
+
+        else:
+            print(f"[✘] Vista no reconocida: '{vista}'. Usa 'movimientos', 'posiciones' o 'suministro'.")
+            return []
+
+
 def mostrar_resumen_activos():
     with get_connection(row_factory=True) as conn:
         rows = conn.execute("""
@@ -414,8 +601,10 @@ if __name__ == "__main__":
         amount=2500.00
     )
 
-    mostrar_resumen_activos()
+    consultar_esquema(vista="suministro", limite=10)
+    consultar_esquema(vista="posiciones", wallet_address="0xInversionistaA", limite=10)
+    consultar_esquema(vista="movimientos", token_id="TOKEN-GBOND-1", limite=10)
+
     reconciliar_token("TOKEN-GBOND-1")
-    mostrar_saldos_por_wallet("TOKEN-GBOND-1")
     mostrar_trazabilidad("TOKEN-GBOND-1", limite=10)
     print("\n[✔] Ejecución finalizada.")
