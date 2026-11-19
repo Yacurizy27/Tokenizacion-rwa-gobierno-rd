@@ -1,5 +1,6 @@
 
 
+
 ## 📦 Prototipo de Tokenización de Activos (RWA) y Trazabilidad en SQLite
 
 Proyecto desarrollado como parte de la **Academia de Blockchain para Gobiernos** (PNUD / MAP / ITLA).
@@ -9,12 +10,12 @@ Simulador en Python y SQLite diseñado para la emisión, transferencia y auditor
 
 MI PROYECTO DE TOKENIZACION ECHO CON IA
 
-Para entender cómo debe funcionar este sistema completo de tokenización de activos (como bonos municipales o RWA - Real World Assets), imagina que estamos construyendo la arquitectura lógica de un libro de contabilidad digital descentralizado, similar a cómo opera una red blockchain (como Algorand), pero simulado de forma transparente en una base de datos relacional local (SQLite).
+Para entender cómo debe funcionar este sistema completo de tokenización de activos (como bonos municipales o RWA - Real World Assets), imagina que estamos construyendo la arquitectura lógica de un libro de contabilidad digital descentralizado, similar a cómo opera una red blockchain (como Algorand), pero simulada de forma transparente en una base de datos relacional local (SQLite).
 El sistema simula el ciclo de vida completo de un activo financiero digital a través de 4 capas o tablas interconectadas:
 
 1. El Activo Real o Subyacente (assets)
 ¿Qué es?: Representa el bien físico, proyecto u obligación legal del mundo real que le da valor al token (por ejemplo, el Bono Verde Municipal para financiar un parque solar).
-Cómo funciona: Almacena la metadata legal y financiera (nombre, descripción, valoración total en dinero fiat y fecha de creación). Sin un activo real respaldándolo, el token sería solo un número sin sustento.
+Cómo funciona: Almacena la metadata legal y financiera (nombre, descripción, valoración total en dinero fiat y fecha de creación). Sin un activo real respaldándolo, el token será solo un número sin sustento.
 
 2. Los Participantes o Wallets (wallets)
 ¿Qué es?: Las cuentas o direcciones digitales que interactúan en la red (ej. el Ayuntamiento que emite el bono, fondos de inversión, ciudadanos o auditores).
@@ -53,3 +54,10 @@ Cumplir normativas: Asegura la trazabilidad y la integridad referencial (evitand
 * `tokenized_assets.db`: Base de datos relacional local con los registros de prueba y auditoría.
 
 
+
+## 📄 Derechos de Autor y Permisos de Uso
+**Todos los derechos reservados (© 2026 Amaury Vargas Soler).**
+
+Este proyecto no se distribuye bajo licencia abierta o libre. Queda prohibido el uso, copia, modificación, distribución o integración total o parcial de este código sin **autorización previa y por escrito** del autor.
+
+Si deseas utilizar este prototipo con fines académicos, institucionales o de investigación, solicita permiso directamente a **Amaury Vargas Soler** a través del perfil de GitHub (`@Yacurizy27`). Consulta el archivo `LICENSE` para más información.
